@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: relative;
+        }
+        .part-display {
+            padding: 10px;
+            text-align: center;
+            background-color: #1e1e1e;
+            color: #888;
+        }
+        .chat-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            clear: both;
+        }
+     .system-message {
+    background-color: #2c2c2c;
+    color: #d4d8d9;
+    align-self: flex-start;
+    margin-right: auto;
+    text-align: left;
+    max-width: 80%;
+    width: fit-content;
+}
+
+.user-message {
+    background-color: #2c2e39;
+    color: #d4d8d9;
+    align-self: flex-end;
+    margin-left: auto;
+    text-align: right;
+    max-width: 80%;
+    width: fit-content;
+}
+        .typing-indicator {
+            color: #2c2c2c;
+            padding: 10px;
+            border-radius: 10px;
+            display: none;
+            margin-bottom: 10px;
+        }
+        .input-area {
+            padding: 10px;
+            position: sticky;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+        }
+        #answer-input {
+            background-color: #212020;
+            color: #e0e0e0;
+            border-color: #444;
+        }
+        #submit-btn {
+            background-color: #2d2d2d;
+            color: white;
+        }
+        #submit-btn:hover {
+            background-color: #4e5165;
+        }
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-container::-webkit-scrollbar-track {
+            background: #1e1e1e;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #3f51b5;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="part-display">
+            Test mode: <span id="current-part">{{currentPart}}</span>
+        </div>
+
+        <div id="chat-container" class="chat-container">
+            <div class="message system-message" id="initial-question">
+                {{initialQuestion}}
+            </div>
+        </div>
+
+        <div id="typing-indicator" class="typing-indicator text-center">
+            Examiner is typing...
+        </div>
+
+        <div class="input-area">
+            <form id="answer-form" class="d-flex">
+                <input type="text" 
+                       id="answer-input" 
+                       class="form-control me-2" 
+                       placeholder="Type your answer here" 
+                       required>
+                 <button id="recordButton" class="btn record-btn" type="button">
+            <i class="bi bi-mic"></i>
+        </button>
+                <button type="submit" 
+                        id="submit-btn" 
+                        class="btn"> <i class="bi bi-send-fill"></i></button>
+            </form>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const chatContainer = document.getElementById('chat-container');
+            const answerForm = document.getElementById('answer-form');
+            const answerInput = document.getElementById('answer-input');
+            const partDisplay = document.getElementById('current-part');
+            const typingIndicator = document.getElementById('typing-indicator');
+
+function formatQuestion(question) {
+    const parts = question.split('\nYou should say:');
+    
+    const mainQuestion = parts[0].trim();
+    
+    const prompts = parts[1] ? 
+        parts[1].split('\n')
+            .filter(prompt => prompt.trim() !== '')
+            .map(prompt => prompt.trim())
+        : [];
+
+    let formattedHTML = `<strong>${mainQuestion}</strong><br><br>`;
+    
+    if (prompts.length > 0) {
+        formattedHTML += "You should say:<br>";
+        prompts.forEach((prompt, index) => {
+            formattedHTML += `• ${prompt}<br>`;
+        });
+    }
+
+    return formattedHTML;
+}
+
+function addMessage(message, type) {
+    const messageElement = document.createElement('div');
+    messageElement.classList.add('message', `${type}-message`);
+    
+    if (type === 'system' && message.includes('\nYou should say:')) {
+        messageElement.innerHTML = formatQuestion(message);
+    } else {
+        messageElement.textContent = message;
+    }
+
+    chatContainer.appendChild(messageElement);
+    
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+            function showTypingIndicator() {
+                typingIndicator.style.display = 'block';
+            }
+
+            function hideTypingIndicator() {
+                typingIndicator.style.display = 'none';
+            }
+
+            answerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const answer = answerInput.value;
+
+                addMessage(answer, 'user');
+
+                showTypingIndicator();
+
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+
+                    const response = await fetch('/submit-answer', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ answer })
+                    });
+
+                    const data = await response.json();
+
+                    hideTypingIndicator();
+
+                    if (data.completed) {
+                        addMessage('Test Completed! Thank you.', 'system');
+                        answerForm.style.display = 'none';
+                    } else {
+                        addMessage(data.currentQuestion, 'system');
+                        
+                        partDisplay.textContent = data.currentPart;
+                    }
+                    answerInput.value = '';
+                } catch (error) {
+                    console.error('Error submitting answer:', error);
+                    hideTypingIndicator();
+                    addMessage('An error occurred. Please try again.', 'system');
+                }
+            });
+
+            answerInput.focus();
+        });
+    </script>
+</body>
+</html>
